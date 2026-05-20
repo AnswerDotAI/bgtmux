@@ -29,3 +29,6 @@ Homepage = "https://github.com/AnswerDotAI/bgtmux"
 
 [tool.setuptools.dynamic]
 version = { attr = "bgtmux.__version__" }
+
+[project.entry-points.pyskills]
+"bgtmux.skill" = "bgtmux.skill"
