@@ -49,6 +49,18 @@ So the usual workflow is:
 3. `poll(...)` while more output is expected
 4. stop when the output is sufficient or the process exits
 
+## Targeting Existing Sessions and Panes
+
+`sid` is not limited to bgtmux-created sessions: any tmux session name works,
+`sid=None` means the current session/pane, and a `%pane_id` (e.g. `"%12"`, as
+shown by `tmux display-message -p '#{pane_id}'`) addresses one specific pane of
+any session — so `send`, `send_keys`, `poll`, `display`, `info`, and
+`capture_range` can drive a particular pane of the user's own session when
+they offer it. Session-level operations (`close`, `attach_command`) given a
+`%pane_id` act on the pane's *owning session* — so `close("%12")` kills the
+whole session containing that pane.
+
+
 ## Manual Inspection
 
 Use `display(sid)` for a readable recent snapshot, `capture_range(sid, ...)`

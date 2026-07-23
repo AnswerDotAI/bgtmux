@@ -132,7 +132,9 @@ def _current_session_or_none():
 def _target_args(flag: str, target: str | None): return [flag, target] if target else []
 
 
-def _session_target(sid: str | None = None): return sid or current_session()
+def _session_target(sid: str | None = None):
+    if sid and sid.startswith("%"): return _tmux("display-message", "-p", "-t", sid, "#{session_name}")  # a %pane_id means its owning session
+    return sid or current_session()
 
 
 def _window_target(sid: str | None = None, window: int | str | None = None):
@@ -161,6 +163,7 @@ def _managed_pane_id(sid: str):
 
 def _primary_pane_id(sid: str | None = None):
     if sid is None: return current_pane()
+    if sid.startswith("%"): return sid  # a %pane_id addresses that pane directly, whatever session owns it
     pane_id = _managed_pane_id(sid)
     if pane_id: return pane_id
     if sid == _current_session_or_none(): return current_pane()
@@ -243,15 +246,21 @@ def start_session(cmd=None, sid=None, session_name=None, cwd=None, env=None, wid
     if cwd is not None: args += ["-c", os.fspath(cwd)]
     if width is not None: args += ["-x", str(width)]
     if height is not None: args += ["-y", str(height)]
-    if env:
-        for k, v in env.items(): args += ["-e", f"{k}={v}"]
-    if cmd is not None: args += [cmd] if isinstance(cmd, str) else list(cmd)
-    pane_id = _tmux(*args)
+    envs = [x for k, v in (env or {}).items() for x in ("-e", f"{k}={v}")]
+    pane_id = _tmux(*args, *envs)
     _tmux("set-option", "-t", sid, "@bgtmux_pane_id", pane_id)
     _tmux("set-option", "-t", sid, "@bgtmux_managed", "1")
     if remain_on_exit:
         _tmux("set-window-option", "-t", f"{sid}:0", "remain-on-exit", "on")
         _tmux("set-window-option", "-t", f"{sid}:0", "remain-on-exit-format", "")
+    if cmd is not None:
+        # Run the command only after the options above are in place: a fast-exiting
+        # cmd passed straight to new-session can die before they land, so the pane
+        # keeps a dead-banner drawn with the default remain-on-exit-format.
+        cargs = ["respawn-pane", "-k", "-t", pane_id]
+        if cwd is not None: cargs += ["-c", os.fspath(cwd)]
+        cargs += envs + ([cmd] if isinstance(cmd, str) else list(cmd))
+        _tmux(*cargs)
     return sid
 
 
@@ -301,7 +310,7 @@ def list_panes(sid: str | None = None, window: int | str | None = None):
 
 
 def info(sid: str | None = None):
-    "Return metadata for the primary pane of the target session."
+    "Return metadata for the primary pane of the target session (`sid` may be a session name or a `%pane_id`)."
     return _pane_info(_primary_pane_id(sid))
 
 
@@ -382,7 +391,7 @@ def poll(sid: str | None = None, yield_time_ms=0, poll_interval_ms=50, lines=DEF
 
 
 def send(sid: str | None = None, chars: str = "", yield_time_ms=0, poll_interval_ms=50, lines=DEFAULT_CAPTURE_LINES):
-    "Paste text into the primary pane, then poll for updated output."
+    "Paste text into the primary pane (`sid` may be a session name or a `%pane_id`), then poll for updated output."
     if chars:
         pane_id = _primary_pane_id(sid)
         buffer_name = f"{DEFAULT_SESSION_PREFIX}{uuid.uuid4().hex}"
@@ -396,7 +405,7 @@ def send(sid: str | None = None, chars: str = "", yield_time_ms=0, poll_interval
 
 
 def send_keys(sid: str | None = None, *keys: str, yield_time_ms=0, poll_interval_ms=50, lines=DEFAULT_CAPTURE_LINES):
-    "Send tmux key names to the primary pane, then poll for output."
+    "Send tmux key names to the primary pane (`sid` may be a session name or a `%pane_id`), then poll for output."
     if keys: _tmux("send-keys", "-t", _primary_pane_id(sid), *keys)
     return poll(sid, yield_time_ms, poll_interval_ms, lines)
 

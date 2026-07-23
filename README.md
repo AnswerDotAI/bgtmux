@@ -1,3 +1,5 @@
+**ARCHIVED**: This module has been merged into `fastmux`, and the bgtmux repo will not be updated.
+
 # bgtmux
 
 `bgtmux` runs background terminal sessions by driving `tmux` entirely through `tmux` CLI commands.

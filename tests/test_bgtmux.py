@@ -146,3 +146,16 @@ def test_finished_sessions_remain_inspectable():
         top = capture_range(sid, 0, 1)
         assert top.lines == ("bye",)
     finally: close(sid)
+
+
+def test_pane_id_addressing_reaches_a_specific_pane():
+    from bgtmux.session import _tmux, attach_command
+    sid = start_session(width=80, height=12)
+    try:
+        second = _tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", sid)
+        out = send(second, "echo pane-two-marker\n", yield_time_ms=1500, lines=6)
+        assert out.pane_id == second
+        assert "pane-two-marker" in out.text
+        assert "pane-two-marker" not in display(sid, lines=6).text  # primary pane untouched
+        assert attach_command(second).endswith(sid)  # session-level ops resolve a pane to its owner
+    finally: close(sid)
